@@ -258,7 +258,7 @@ export class Sequelize extends SequelizeTypeScript {
       benchmark: false,
       minifyAliases: false,
       logQueryParameters: false,
-      disableAlsTransactions: false,
+      disableClsTransactions: false,
       ...options,
       pool: _.defaults(options.pool || {}, {
         max: 5,
@@ -270,8 +270,8 @@ export class Sequelize extends SequelizeTypeScript {
     };
 
     // TODO: remove & assign property directly once this constructor has been migrated to the SequelizeTypeScript class
-    if (!this.options.disableAlsTransactions) {
-      this._setupTransactionAls();
+    if (!this.options.disableClsTransactions) {
+      this._setupTransactionCls();
     }
 
     if (!this.options.dialect) {
@@ -281,6 +281,11 @@ export class Sequelize extends SequelizeTypeScript {
     if (this.options.dialect === 'postgresql') {
       this.options.dialect = 'postgres';
     }
+
+    //     if (this.options.define.hooks) {
+    //       throw new Error(`The "define" Sequelize option cannot be used to add hooks to all models. Please remove the "hooks" property from the "define" option you passed to the Sequelize constructor.
+    // Instead of using this option, you can listen to the same event on all models by adding the listener to the Sequelize instance itself, since all model hooks are forwarded to the Sequelize instance.`);
+    //     }
 
     if (this.options.logging === true) {
       deprecations.noTrueLogging();
@@ -485,7 +490,7 @@ export class Sequelize extends SequelizeTypeScript {
    *
    * sequelize.models.modelName // The model will now be available in models under the name given to define
    */
-  define(modelName, attributes, options = {}) {
+  define(modelName, attributes = {}, options = {}) {
     options.modelName = modelName;
     options.sequelize = this;
 
@@ -646,7 +651,8 @@ Use Sequelize#query if you wish to use replacements.`);
 
     // map raw fields to model attributes
     if (options.mapToModel) {
-      options.fieldMap = _.get(options, 'model.fieldAttributeMap', {});
+      // TODO: throw if model is not specified
+      options.fieldMap = options.model?.fieldAttributeMap;
     }
 
     options = _.defaults(options, {
@@ -689,7 +695,7 @@ Use Sequelize#query if you wish to use replacements.`);
 
     return await retry(async () => {
       if (options.transaction === undefined) {
-        options.transaction = this.getCurrentAlsTransaction();
+        options.transaction = this.getCurrentClsTransaction();
       }
 
       checkTransaction();
@@ -1161,10 +1167,8 @@ Use Sequelize#query if you wish to use replacements.`);
   normalizeAttribute(attribute) {
     if (!_.isPlainObject(attribute)) {
       attribute = { type: attribute };
-    }
-
-    if (!attribute.type) {
-      return attribute;
+    } else {
+      attribute = { ...attribute };
     }
 
     if (attribute.values) {
@@ -1190,13 +1194,11 @@ Remove the "values" property to resolve this issue.
         `.trim());
     }
 
-    attribute.type = this.normalizeDataType(attribute.type);
-
-    if (Object.prototype.hasOwnProperty.call(attribute, 'defaultValue') && typeof attribute.defaultValue === 'function'
-        && [DataTypes.NOW, DataTypes.UUIDV1, DataTypes.UUIDV4].includes(attribute.defaultValue)
-    ) {
-      attribute.defaultValue = new attribute.defaultValue();
+    if (!attribute.type) {
+      return attribute;
     }
+
+    attribute.type = this.normalizeDataType(attribute.type);
 
     return attribute;
   }
@@ -1280,7 +1282,7 @@ Sequelize.prototype.Validator = Sequelize.Validator = Validator;
 
 Sequelize.Model = Model;
 
-Sequelize.QueryInterface = AbstractQueryInterface;
+Sequelize.AbstractQueryInterface = AbstractQueryInterface;
 Sequelize.BelongsTo = BelongsTo;
 Sequelize.HasOne = HasOne;
 Sequelize.HasMany = HasMany;
